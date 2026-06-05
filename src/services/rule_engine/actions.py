@@ -39,6 +39,13 @@ def execute_action(
         
     elif action_type == "LIMIT":
         max_amount = Decimal(str(action_config.get("max_amount", 0)))
+        
+        # If the limit is specified as a per-unit cap, multiply by the line item's billed quantity
+        # This makes the engine unit-agnostic (works for DAY, SESSION, TEST, etc.)
+        if action_config.get("limit_type") == "PER_UNIT":
+            quantity = Decimal(str(context.get("line_item.quantity", 1)))
+            max_amount *= quantity
+            
         acc_key = action_config.get("accumulator_key")
         
         if acc_key:

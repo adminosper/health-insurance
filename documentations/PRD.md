@@ -40,7 +40,7 @@ PENDING | APPROVED | OVERRIDDEN | REJECTED
 
 #### `LineItemStatus`
 ```
-APPROVED | DENIED | PARTIALLY_APPROVED | EXCLUDED
+SUBMITTED | APPROVED | DENIED | PARTIALLY_APPROVED | EXCLUDED
 ```
 
 #### `ExecutionPhase`
@@ -156,7 +156,7 @@ MALE | FEMALE | OTHER
 | `billed_amount` | Decimal | NOT NULL | Original hospital charge |
 | `allowed_amount` | Decimal | DEFAULT 0 | Amount after capping/exclusions |
 | `insurer_payable` | Decimal | DEFAULT 0 | Final amount insurer pays |
-| `status` | LineItemStatus Enum | DEFAULT 'APPROVED' | Per-item adjudication outcome |
+| `status` | LineItemStatus Enum | DEFAULT 'SUBMITTED' | Per-item adjudication outcome |
 | `audit_trail` | JSONB | DEFAULT '[]' | Ordered array of adjustment records |
 
 ---
@@ -244,7 +244,7 @@ flowchart TD
             K["Phase 4: COST_SHARING\nDeductible, Copay"]
         end
 
-        L["4. Accumulator Update\nTentatively Reserve Amounts"]
+        L["4. Adjudication Complete\nDynamic Effective Balance Calculated"]
         M["5. EOB Generation\nBuild Per-Line-Item Audit Trail"]
     end
 
@@ -263,7 +263,7 @@ flowchart TD
 
     subgraph REJECTION["Rejection Paths"]
         X1["Status: REJECTED\nPolicy validation failed"]
-        X4["Approver REJECTED\nRollback tentative\naccumulator reservations"]
+        X4["Approver REJECTED\nPending status removed,\nfunds dynamically freed"]
     end
 
     A --> B
@@ -306,12 +306,12 @@ flowchart TD
 1. **Member submits** a claim with line items via `POST /api/v1/claims`.
 2. **Policy Validation** checks if the policy is active, member is enrolled, and filing is within deadline. Fails → `REJECTED`.
 3. **Document Verification** checks mandatory documents.
-4. **Adjudication Engine** runs the Rule Engine on each line item through 4 fixed phases: `EXCLUSION` → `CAPPING` → `COVERAGE` → `COST_SHARING`. Each phase logs its deductions to the line item's `audit_trail`.
-5. **Accumulator Update** tentatively reserves the approved amounts from the policy's sum insured and category buckets.
+4. **Adjudication Engine** runs the Rule Engine on each line item through 4 fixed phases: `EXCLUSION` → `CAPPING` → `COVERAGE` → `COST_SHARING`. Each phase logs its deductions to the line item's `audit_trail`. (Zero-impact rules are intelligently filtered out to reduce noise).
+5. **Dynamic Effective Balance**: No physical database accumulator updates occur yet. Instead, any future claims will dynamically calculate their available balance by subtracting this claim's PENDING_APPROVAL totals.
 6. **EOB Generation** builds the final Explanation of Benefits with per-line-item status and explanations.
 7. Claim halts at **`PENDING_APPROVAL`**. Line items reflect the system's recommended statuses.
 8. **Approver reviews** the full audit trail via `GET /api/v1/admin/claims/{id}` and submits their decision via `POST /api/v1/admin/claims/{id}/approve`:
    - **CONFIRM** → Accept the engine's output as-is.
    - **OVERRIDE** → Adjust amounts/statuses with mandatory reason (logged in audit trail).
-   - **REJECT** → Deny the claim entirely, rollback tentative accumulator reservations.
-9. On approval, accumulators are **finalized** and the claim moves to **`PAID`**.
+   - **REJECT** → Deny the claim entirely (dynamically frees up the locked funds).
+9. On approval, physical database accumulators are **hard-debited** and the claim moves to **`PAID`**.

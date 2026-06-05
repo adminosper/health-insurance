@@ -52,6 +52,7 @@ class ClaimStatus(str, enum.Enum):
 class LineItemStatus(str, enum.Enum):
     """Per-line-item adjudication outcome."""
 
+    SUBMITTED = "SUBMITTED"
     APPROVED = "APPROVED"
     DENIED = "DENIED"
     PARTIALLY_APPROVED = "PARTIALLY_APPROVED"

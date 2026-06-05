@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from src.models.claims import LineItem
 from src.services.adjudication_engine.context_builder import add_line_item_to_context
 from src.services.rule_engine.engine import evaluate_rule
+from src.serializers.audit import AuditTrailEntry
 from src.shared.enums import ExecutionPhase, LineItemStatus
 
 
@@ -78,7 +79,9 @@ def run_pipeline(
         }
         
         audit_trail = []
+        step_count = 0
         was_excluded = False
+        acc_keys_to_update = set()
 
         # Execute through phases
         for phase in [
@@ -94,27 +97,45 @@ def run_pipeline(
                 # Sync in-memory accumulators into context for this rule evaluation
                 for k, v in in_memory_accumulators.items():
                     context[f"accumulator.{k}"] = float(v)
-                    
-                passed, updated_financials, audit = evaluate_rule(context, rule, financials)
+                
+                financials_before = financials.copy()
+                passed, updated_financials, action_result = evaluate_rule(context, rule, financials)
                 
                 if passed:
-                    financials = updated_financials
-                    audit_trail.append(audit)
-                    
-                    # If this was an exclusion rule, mark and break out of all phases
-                    if rule["action_type"] == "EXCLUDE":
-                        was_excluded = True
-                        break
-                        
-                    # If this rule had an accumulator limit, update the in-memory tracker
-                    # NOTE: We only track insurer_payable consumption against the accumulator
-                    if rule["action_type"] == "LIMIT":
-                        acc_key = rule["action_config"].get("accumulator_key")
+                    # Collect accumulator keys for deferred update at the end of the line item
+                    if rule.get("action_type") == "LIMIT":
+                        acc_key = rule.get("action_config", {}).get("accumulator_key")
                         if acc_key:
-                            current_usage = in_memory_accumulators.get(acc_key, Decimal("0.00"))
-                            # The impact on the accumulator is the final allowed amount for this item
-                            # We use insurer_payable because it reflects what is actually paid out
-                            in_memory_accumulators[acc_key] = current_usage + financials["insurer_payable"]
+                            acc_keys_to_update.add(acc_key)
+                    
+                    # Only log to audit trail if it actually changed the financials or was an exclusion
+                    amount_impacted = Decimal(str(action_result.get("amount_impacted", 0)))
+                    if amount_impacted > 0 or rule.get("action_type") == "EXCLUDE":
+                        step_count += 1
+                        financials = updated_financials
+                        
+                        audit_model = AuditTrailEntry(
+                            step=step_count,
+                            rule_name=rule["name"],
+                            stage=phase,
+                            effect_type=action_result["action"],
+                            amount_before=Decimal(str(financials_before["insurer_payable"])),
+                            amount_adjusted=-amount_impacted,
+                            amount_after=financials["insurer_payable"],
+                            reason_code=action_result["reason_code"],
+                            explanation=action_result["explanation"]
+                        )
+                        audit_trail.append(audit_model.model_dump(mode="json"))
+                        
+                        if rule.get("action_type") == "EXCLUDE":
+                            was_excluded = True
+                            break
+
+        # Now that all phases (including cost sharing) are complete,
+        # update the in-memory accumulators with the final insurer_payable amount
+        for acc_key in acc_keys_to_update:
+            current_usage = in_memory_accumulators.get(acc_key, Decimal("0.00"))
+            in_memory_accumulators[acc_key] = Decimal(str(current_usage)) + financials["insurer_payable"]
 
         status = _determine_line_item_status(financials["billed_amount"], financials["insurer_payable"], was_excluded)
         

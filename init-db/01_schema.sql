@@ -30,7 +30,7 @@ CREATE TYPE claim_status AS ENUM (
 
 
 CREATE TYPE line_item_status AS ENUM (
-    'APPROVED', 'DENIED', 'PARTIALLY_APPROVED', 'EXCLUDED'
+    'SUBMITTED', 'APPROVED', 'DENIED', 'PARTIALLY_APPROVED', 'EXCLUDED'
 );
 
 CREATE TYPE execution_phase AS ENUM (
@@ -88,8 +88,8 @@ CREATE TABLE members (
 CREATE TABLE accumulators (
     policy_id               UUID PRIMARY KEY REFERENCES policies(id),
     available_sum_insured   DECIMAL(15, 2) NOT NULL,
-    accumulated_ncb         DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    active_deductible_paid  DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    accumulated_ncb         DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    active_deductible_paid  DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     category_usage          JSONB NOT NULL DEFAULT '{}'
 );
 
@@ -128,9 +128,9 @@ CREATE TABLE claims (
     admission_date          DATE NOT NULL,
     discharge_date          DATE NOT NULL,
     status                  claim_status NOT NULL DEFAULT 'SUBMITTED',
-    total_billed            DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    total_insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    total_member_payable    DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    total_billed            DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    total_insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    total_member_payable    DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     documents_attached      JSONB NOT NULL DEFAULT '[]',
     created_at              TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -141,10 +141,10 @@ CREATE TABLE line_items (
     claim_id          UUID NOT NULL REFERENCES claims(id),
     service_category  service_category NOT NULL,
     billed_amount     DECIMAL(15, 2) NOT NULL,
-    allowed_amount    DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    allowed_amount    DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+    insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     metadata          JSONB NOT NULL DEFAULT '{}',
-    status            line_item_status NOT NULL DEFAULT 'APPROVED',
+    status            line_item_status NOT NULL DEFAULT 'SUBMITTED',
     audit_trail       JSONB NOT NULL DEFAULT '[]'
 );
 

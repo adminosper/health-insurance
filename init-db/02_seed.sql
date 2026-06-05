@@ -56,7 +56,7 @@ INSERT INTO rules (id, plan_id, name, execution_phase, priority, condition, acti
     'CAPPING', 1,
     '{"all": [{"field": "line_item.service_category", "operator": "EQ", "value": "ROOM_RENT"}, {"field": "policy.chosen_sum_insured", "operator": "EQ", "value": 500000}]}',
     'LIMIT',
-    '{"max_amount": 5000, "period": "PER_DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.5,000/day for 5L SI"}'
+    '{"max_amount": 5000, "limit_type": "PER_UNIT", "limit_unit": "DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.5,000/day for 5L SI"}'
 ),
 (
     'b1b2c3d4-0001-4000-8000-000000000004',
@@ -65,7 +65,7 @@ INSERT INTO rules (id, plan_id, name, execution_phase, priority, condition, acti
     'CAPPING', 2,
     '{"all": [{"field": "line_item.service_category", "operator": "EQ", "value": "ROOM_RENT"}, {"field": "policy.chosen_sum_insured", "operator": "GTE", "value": 1000000}]}',
     'LIMIT',
-    '{"max_amount": 10000, "period": "PER_DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.10,000/day for 10L+ SI"}'
+    '{"max_amount": 10000, "limit_type": "PER_UNIT", "limit_unit": "DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.10,000/day for 10L+ SI"}'
 ),
 (
     'b1b2c3d4-0001-4000-8000-000000000005',
@@ -123,7 +123,7 @@ INSERT INTO rules (id, plan_id, name, execution_phase, priority, condition, acti
     'CAPPING', 1,
     '{"field": "line_item.service_category", "operator": "EQ", "value": "ROOM_RENT"}',
     'LIMIT',
-    '{"max_amount": 8000, "period": "PER_DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.8,000/day"}'
+    '{"max_amount": 8000, "limit_type": "PER_UNIT", "limit_unit": "DAY", "reason_code": "ROOM_RENT_CAP", "explanation": "Room rent capped at Rs.8,000/day"}'
 ),
 (
     'b1b2c3d4-0002-4000-8000-000000000003',

@@ -38,6 +38,7 @@ Members need to submit claims electronically and track their adjudication status
 * **Decoupled Architecture**: Validated claims are persisted to the database with a status of `SUBMITTED`, laying the groundwork for asynchronous processing.
 
 ### What We Didn't (Deferred)
+* **Duplicate Claim Submission**: Validations will also contain checks for duplicate claim submission in V2. This is currently not implemented as part of V1.
 * **Immediate Policy/Limit Adjudication**: We do not run immediate checks to validate rules, policy limits, or remaining balances (accumulators) during submission. For v1, all these adjudications and policy limits/rules validations are deferred to run at the same time during the decoupled claim processing phase.
 * **Role-Based Access Control (RBAC)**: Fine-grained user vs. admin access policies (e.g., ensuring only administrators can view decrypted diagnosis codes) are deferred to a later iteration.
 
@@ -58,7 +59,9 @@ For a high-level technical deep dive, please review the engine documentation fir
   1. **Rule Engine**: A pure, stateless evaluator. It parses a custom JSON Domain Specific Language (DSL) to evaluate conditions (e.g., diagnosis matches, waiting periods) and executes financial mutations (EXCLUDE, LIMIT, COPAY, DEDUCTIBLE) on individual line items.
   2. **Adjudication Engine (Pipeline)**: The stateful orchestrator. It fetches necessary database records, builds the flattened execution context, runs the sequential processing phases (`EXCLUSION` -> `CAPPING` -> `COVERAGE` -> `COST_SHARING`), manages in-memory accumulators across line items, and handles database persistence.
 * **Line Item Metadata Normalization**: Designed a metadata structure (`quantity` and `unit`) on line items. The Context Builder converts this into a standard `per_unit_amount` so that the Rule Engine doesn't have to understand different units of measure.
-* **Concurrent Claim Idempotency**: Handled cases where a claim is processed while another claim for the same policy is already `PENDING_APPROVAL`. The system computes the *effective* sum insured by pre-deducting amounts reserved by other pending claims, ensuring limits are never double-spent.
+* **Concurrent Claim Idempotency**: Handled cases where a claim is processed while another claim for the same policy is already `PENDING_APPROVAL`. The system computes the *effective* sum insured by pre-deducting amounts reserved by other pending claims, ensuring limits are never double-spent. Because of this dynamic effective balance, **we never physically update the `accumulators` database row during adjudication**. Physical hard-debits only occur when the claim is finalized to `PAID`.
+* **Deferred Accumulator Math**: To avoid leaking funds, in-memory accumulator usage is tracked in a deferred manner during the pipeline execution. The absolute final, post-copay `insurer_payable` amount is what gets recorded against the accumulator at the very end of the line item's processing.
+* **Unit-Agnostic Capping**: The rule engine's LIMIT action dynamically scales caps based on the line item metadata (`quantity` and `unit`). By configuring a rule with `"limit_type": "PER_UNIT"` and an explicit `"limit_unit"`, the engine natively supports multi-unit treatments (like physiotherapy sessions or room rent days) without hardcoded period checks.
 
 ### What We Didn't (Deferred) / V1 Limitations
 * **Rule-Specific Manual Approvals**: We are deferring the logic to tag specific rules as "requiring manual check" to V2. For V1, we assume all rules configured in the system can be fully and autonomously processed by the Rule Engine without requiring an explicit manual override queue just for a triggered rule.
@@ -69,3 +72,28 @@ For a high-level technical deep dive, please review the engine documentation fir
 
 ### Assumptions
 * **Execution Phase Ordering**: We assume a strict, hardcoded order of operations: `EXCLUSION` rules run first (to drop invalid items entirely), followed by `CAPPING` (per-item or category limits), then `COVERAGE` (overall policy sum insured limits), and finally `COST_SHARING` (copays and deductibles on the remaining covered amount).
+* **PED and Medical Codes Enum**: We assume all Pre-Existing Disease (PED) and medical diagnosis codes are consistent strings across rules and claims. While an ENUM or a standard taxonomy (like ICD-10) should be created for data integrity, we deferred this since the primary focus was building the claim processing orchestration.
+
+### Pipeline State Machine & Audit Trail (V1 Reimbursement)
+The backend manages state transitions safely and automatically builds a full audit trail before `PENDING_APPROVAL`:
+```
+SUBMITTED
+  → VALIDATED (policy checks pass)
+  → PENDING_APPROVAL (awaiting manual approver action)
+  → APPROVED / PARTIALLY_APPROVED / DENIED (approver confirms or overrides)
+  → PAID (NEFT payout processed)
+```
+Each line item generates a detailed `audit_trail` tracking every mathematical mutation:
+```json
+{
+  "step": 1,
+  "rule_name": "Room Rent Cap",
+  "stage": "CAPPING",
+  "effect_type": "LIMIT",
+  "amount_before": 12000.00,
+  "amount_adjusted": -2000.00,
+  "amount_after": 10000.00,
+  "reason_code": "ROOM_RENT_EXCEEDED",
+  "explanation": "Capped Room Rent"
+}
+```

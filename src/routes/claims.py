@@ -49,3 +49,16 @@ def get_claim_status(claim_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
     
     return claim_response
+
+
+@router.get(
+    "/{claim_id}/eob",
+    summary="Get Explanation of Benefits (EOB)",
+)
+def get_claim_eob(claim_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Fetch the full Explanation of Benefits document for a claim."""
+    eob_response = claim_service.generate_eob(db=db, claim_id=claim_id)
+    if not eob_response:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
+    
+    return eob_response

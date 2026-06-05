@@ -10,9 +10,9 @@ This strict separation of concerns ensures that business logic remains declarati
 
 ### **Responsibilities**
 The Rule Engine is a purely stateless, side-effect-free evaluator. It evaluates a single JSON rule against a flat dictionary (the Context Object) and applies a financial mutation (Action) if the condition matches.
-- **Condition Parsing**: Evaluates nested logical operators (`all`, `any`, `not`) and comparators (`EQ`, `GT`, `INTERSECTS`, etc.) against the context.
+- **Condition Parsing**: Evaluates nested logical operators (`all`, `any`, `not`) and comparators (`EQ`, `GT`, `INTERSECTS`, etc.) against the context. The condition acts purely as a selector ("Does this rule apply?").
 - **Action Execution**: Applies financial mutations (`EXCLUDE`, `LIMIT`, `COPAY`, `DEDUCTIBLE`) to the line item's `allowed_amount`, `insurer_payable`, and `member_payable` based on the rule config.
-- **Audit Generation**: Returns a read-only audit trail entry explaining what financial mutation occurred and why.
+- **Audit Generation**: Returns a read-only audit trail entry explaining what financial mutation occurred and why. (Note: Zero-impact mutations are filtered out by the Orchestrator to prevent EOB noise).
 
 ### **What it DOES NOT do**
 - It does not read from or write to the database.

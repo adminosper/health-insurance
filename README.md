@@ -91,8 +91,16 @@ The Engine executed the rules:
 2. *Copay*: A flat 10% copay was applied across the board on the allowed amounts.
 3. The total `insurer_payable` and `member_payable` fields in the response are now mathematically accurate based on the parsed JSON rules.
 
-### Step 3: Verify the Database (Optional but recommended!)
-If you want to see the beautifully generated Audit Trails for each line item (which an Admin Reviewer would see):
+### Step 3: Fetch Explanation of Benefits (EOB)
+Now that the Adjudication Engine has mathematically processed the claim, a reviewer (or the member) can fetch the fully generated EOB. This endpoint compiles the per-line-item audit trails detailing exactly what financial rules fired and why.
+
+**Endpoint:** `GET http://localhost:8000/api/v1/claims/{claim_id}/eob`
+
+**Desired Output:**
+You will receive a detailed JSON response showing the `total_billed`, `total_insurer_payable`, and a `line_items` array. Inside each line item, you'll see a pristine `audit_trail` array that tracks every rule that impacted the financials (e.g., Room Rent Capping, Copays) with explicit `amount_adjusted` values and `reason_codes`!
+
+### Step 4: Verify the Database (Optional)
+If you want to see how this translates to raw database state:
 
 1. Log into the Docker database container:
    ```bash
@@ -104,7 +112,7 @@ If you want to see the beautifully generated Audit Trails for each line item (wh
    FROM line_items 
    WHERE claim_id = 'YOUR_CLAIM_ID_HERE';
    ```
-You will see exactly how the `audit_trail` JSON array captures every rule that fired (`LIMIT`, `COPAY`, etc.), the exact reason codes, and the precise financial impact step-by-step.
+You will see exactly how the `audit_trail` JSONB array captures every rule that fired.
 
 ---
 

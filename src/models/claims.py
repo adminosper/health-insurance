@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
@@ -32,9 +33,9 @@ class Claim(Base):
     discharge_date = Column(Date, nullable=False)
     status = Column(ENUM(ClaimStatus, name="claim_status", create_type=False), nullable=False, default=ClaimStatus.SUBMITTED)
 
-    total_billed = Column(Numeric(15, 2), nullable=False, default=0)
-    total_insurer_payable = Column(Numeric(15, 2), nullable=False, default=0)
-    total_member_payable = Column(Numeric(15, 2), nullable=False, default=0)
+    total_billed = Column(Numeric(15, 2), nullable=False, default=Decimal("0.00"))
+    total_insurer_payable = Column(Numeric(15, 2), nullable=False, default=Decimal("0.00"))
+    total_member_payable = Column(Numeric(15, 2), nullable=False, default=Decimal("0.00"))
     documents_attached = Column(JSONB, nullable=False, default=list)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
@@ -48,8 +49,8 @@ class LineItem(Base):
     claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id"), nullable=False)
     service_category = Column(ENUM(ServiceCategory, name="service_category", create_type=False), nullable=False)
     billed_amount = Column(Numeric(15, 2), nullable=False)
-    allowed_amount = Column(Numeric(15, 2), nullable=False, default=0)
-    insurer_payable = Column(Numeric(15, 2), nullable=False, default=0)
+    allowed_amount = Column(Numeric(15, 2), nullable=False, default=Decimal("0.00"))
+    insurer_payable = Column(Numeric(15, 2), nullable=False, default=Decimal("0.00"))
     line_item_metadata = Column("metadata", JSONB, nullable=False, default=dict)
-    status = Column(ENUM(LineItemStatus, name="line_item_status", create_type=False), nullable=False, default=LineItemStatus.APPROVED)
+    status = Column(ENUM(LineItemStatus, name="line_item_status", create_type=False), nullable=False, default=LineItemStatus.SUBMITTED)
     audit_trail = Column(JSONB, nullable=False, default=list)

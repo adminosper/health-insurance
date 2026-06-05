@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 from src.models.claims import Claim
 from src.repositories import claims_repo, policy_repo, rules_repo
+from src.serializers.audit import AuditTrailEntry
 from src.services.adjudication_engine.context_builder import build_base_context
 from src.services.adjudication_engine.pipeline import run_pipeline
 from src.services.adjudication_engine.pre_checks import run_pre_adjudication_checks
-from src.shared.enums import ClaimStatus, LineItemStatus
+from src.shared.enums import ActionType, ClaimStatus, ExecutionPhase, LineItemStatus
 
 
 def _serialize_rules(rules) -> list[Dict[str, Any]]:
@@ -64,12 +65,20 @@ def process_claim(db: Session, claim_id: uuid.UUID) -> Claim:
             item.status = LineItemStatus.DENIED
             item.allowed_amount = Decimal("0.00")
             item.insurer_payable = Decimal("0.00")
-            item.audit_trail = [{
-                "action": "SYSTEM_REJECT",
-                "reason_code": "PRE_CHECK_FAILED",
-                "explanation": pre_check_reason,
-                "amount_impacted": float(item.billed_amount)
-            }]
+            
+            audit = AuditTrailEntry(
+                step=0,
+                rule_name="Pre-Adjudication Check",
+                stage=ExecutionPhase.EXCLUSION,
+                effect_type=ActionType.EXCLUDE,
+                amount_before=item.billed_amount,
+                amount_adjusted=-item.billed_amount,
+                amount_after=Decimal("0.00"),
+                reason_code="PRE_CHECK_FAILED",
+                explanation=pre_check_reason
+            )
+            item.audit_trail = [audit.model_dump(mode="json")]
+            
         db.commit()
         return claim
 
