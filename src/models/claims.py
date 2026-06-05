@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 from src.database.connection import Base
@@ -26,7 +26,7 @@ class Claim(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     policy_id = Column(UUID(as_uuid=True), ForeignKey("policies.id"), nullable=False)
     member_id = Column(UUID(as_uuid=True), ForeignKey("members.id"), nullable=False)
-    diagnosis_codes = Column(JSONB, nullable=False)
+    diagnosis_codes = Column(String, nullable=False)
     claim_type = Column(ENUM(ClaimType, name="claim_type", create_type=False), nullable=False)
     is_accident = Column(Boolean, nullable=False, default=False)
     admission_date = Column(Date, nullable=False)

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from src.models.claims import Claim, LineItem
 from src.serializers.claims import ClaimSubmitRequest
 from src.shared.enums import ClaimStatus
+from src.utils.crypto import cipher
 
 
 def create_claim_with_items(db: Session, request: ClaimSubmitRequest) -> Claim:
@@ -23,7 +24,7 @@ def create_claim_with_items(db: Session, request: ClaimSubmitRequest) -> Claim:
         is_accident=request.is_accident,
         admission_date=request.admission_date,
         discharge_date=request.discharge_date,
-        diagnosis_codes=request.diagnosis_codes,
+        diagnosis_codes=cipher.encrypt_list(request.diagnosis_codes),
         documents_attached=[doc.value for doc in request.documents_attached],
         total_billed=total_billed,
         status=ClaimStatus.SUBMITTED,

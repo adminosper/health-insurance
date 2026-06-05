@@ -9,6 +9,8 @@ services:
       - .:/app
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/health_insurance
+    env_file:
+      - .env
     depends_on:
       - db
 

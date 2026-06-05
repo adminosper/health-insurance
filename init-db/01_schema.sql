@@ -125,7 +125,7 @@ CREATE TABLE claims (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     policy_id               UUID NOT NULL REFERENCES policies(id),
     member_id               UUID NOT NULL REFERENCES members(id),
-    diagnosis_codes         JSONB NOT NULL,
+    diagnosis_codes         TEXT NOT NULL,
     claim_type              claim_type NOT NULL,
     is_accident             BOOLEAN NOT NULL DEFAULT FALSE,
     admission_date          DATE NOT NULL,

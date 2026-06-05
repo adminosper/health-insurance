@@ -23,3 +23,24 @@ To test or demonstrate any working claim processing functionality, we must have 
 
 ### Assumptions
 * **Health Insurance Domain Limit**: We assume we are building strictly for the health insurance domain for now. Modeling other insurance domains (e.g., motor, property, life) would require completely different accumulator types, rules, and claim models.
+
+---
+
+## 2. Sub-Process: Claim Submission and Status Retrieval (Customer/Member Perspective)
+
+### Why Required
+Members need to submit claims electronically and track their adjudication status in real-time. Because claim processing and medical rule adjudication are heavy operations, the submission workflow must be decoupled from the actual processing engine to ensure high API responsiveness and resilience.
+
+### What Built
+* **Member Claims APIs**: Implemented `POST /api/v1/claims` for submitting claims and `GET /api/v1/claims/{claim_id}` for members to fetch their claim status and details.
+* **Member/Policy Validation**: The submission endpoint verifies synchronously that the submitting member is actually part of the provided policy before creating the claim.
+* **Field-Level Encryption (FLE) for Diagnosis Codes**: Since diagnosis codes represent sensitive Protected Health Information (PHI), they are encrypted at the application layer using symmetric encryption (Fernet) before being saved to the database. The secret key is loaded from the environment variables, ensuring that diagnosis codes are encrypted at rest in the database.
+* **Decoupled Architecture**: Validated claims are persisted to the database with a status of `SUBMITTED`, laying the groundwork for asynchronous processing.
+
+### What We Didn't (Deferred)
+* **Immediate Policy/Limit Adjudication**: We do not run immediate checks to validate rules, policy limits, or remaining balances (accumulators) during submission. For v1, all these adjudications and policy limits/rules validations are deferred to run at the same time during the decoupled claim processing phase.
+* **Role-Based Access Control (RBAC)**: Fine-grained user vs. admin access policies (e.g., ensuring only administrators can view decrypted diagnosis codes) are deferred to a later iteration.
+
+### Assumptions
+* **Mocked Document Attachments**: The system does not process actual files or documents. Instead, documents are passed as a list of document type strings (validated against a finite set of allowed document enums, e.g., `"bills"`, `"receipts"`). In a production flow, we assume documents would need actual binary storage (e.g., S3), parsing/OCR, and manual validation audits to verify physical documents.
+
