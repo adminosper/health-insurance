@@ -108,20 +108,20 @@ PolicyValidation → DocumentVerification → Adjudication → AccumulatorUpdate
 | Step | Responsibility | Output State |
 |---|---|---|
 | `PolicyValidation` | Is policy active? Is member enrolled? Is filing within deadline? | `VALIDATED` (or `REJECTED` if invalid) |
-| `DocumentVerification` | Checks mandatory documents (claim form, discharge summary, receipts, cancelled cheque). Missing docs halt pipeline. | `UNDER_REVIEW` (or `QUERY_RAISED` if docs missing) |
-| `Adjudication` | Runs the Rule Engine (Exclusion → Capping → Coverage → Cost-Sharing) on each line item. Builds per-line-item audit trail. | `ADJUDICATED` |
-| `AccumulatorUpdate` | Tentatively reserves the approved amount from the policy's sum insured and category buckets. | `ADJUDICATED` (accumulators updated) |
-| `EOBGeneration` | Builds the structured Explanation of Benefits with per-line-item breakdown and audit trail. | `ADJUDICATED` (EOB attached) |
-| `ManualApproval` | Pipeline **halts here**. An approver reviews the full audit trail and updates the `manual_approval_status`. | `APPROVED` / `PARTIALLY_APPROVED` / `DENIED` |
+| `DocumentVerification` | Checks mandatory documents (claim form, discharge summary, receipts, cancelled cheque). Missing docs halt pipeline. | |
+| `Adjudication` | Runs the Rule Engine (Exclusion → Capping → Coverage → Cost-Sharing) on each line item. Builds per-line-item audit trail. | |
+| `AccumulatorUpdate` | Tentatively reserves the approved amount from the policy's sum insured and category buckets. | |
+| `EOBGeneration` | Builds the structured Explanation of Benefits with per-line-item breakdown and audit trail. | |
+| `ManualApproval` | Pipeline **halts here**. An approver reviews the full audit trail and finalizes the overall claim `status`. | `APPROVED` / `PARTIALLY_APPROVED` / `DENIED` |
 | `PolicyholderPayout` | Marks the claim for NEFT payout to the policyholder's bank account. | `PAID` |
 
 #### Manual Approval Step (Detail)
 The `ManualApproval` step is critical. It ensures no claim is auto-paid without human oversight. When the pipeline reaches this step:
 
-1.  The claim status moves to `PENDING_APPROVAL`.
-2.  The `manual_approval_status` field is set to `PENDING`.
-3.  The approver is presented with the **full audit trail**.
-4.  The approver submits their decision via the API, which updates the `manual_approval_status` and finalizes the overall claim `status`.
+1.  A claim lands in `PENDING_APPROVAL` status after pipeline completion.
+2.  The line items hold the system's recommended statuses and the audit trail holds the exact logic applied.
+3.  The approver reviews the `audit_trail` to see exactly which rules fired.
+4.  The approver submits their decision via the API, which finalizes the overall claim `status` to `APPROVED`, `PARTIALLY_APPROVED`, or `DENIED`.
 5.  Only after manual approval does the pipeline resume to the `PolicyholderPayout` step.
 
 #### Audit Trail Structure (Per Line Item)
@@ -185,9 +185,6 @@ Key differences from Reimbursement:
 ```
 SUBMITTED
   → VALIDATED (policy checks pass)
-  → QUERY_RAISED (missing documents — pipeline halts, awaits resubmission)
-  → UNDER_REVIEW (documents verified, adjudication begins)
-  → ADJUDICATED (rules have fired, amounts calculated)
   → PENDING_APPROVAL (awaiting manual approver action)
   → APPROVED / PARTIALLY_APPROVED / DENIED (approver confirms or overrides)
   → PAID (NEFT payout processed)
@@ -203,5 +200,5 @@ SUBMITTED
 ### Assumptions
 *   V1 implements only the Reimbursement Pipeline. The Claim entity schema includes nullable cashless-specific fields (`pre_auth_id`, `claim_type`) to support V2 without migration.
 *   The `ManualApproval` step is synchronous in V1 — we expose an API endpoint for the approver to submit their decision. No async notification/queue system.
-*   The `QUERY_RAISED` state allows document resubmission, after which the pipeline resumes from `DocumentVerification`.
+
 *   Accumulator reservations made before `ManualApproval` are tentative. If the approver denies or overrides, the reservation is rolled back/adjusted.

@@ -13,7 +13,6 @@ from src.shared.enums import (
     ClaimStatus,
     ClaimType,
     LineItemStatus,
-    ManualApprovalStatus,
     ServiceCategory,
 )
 
@@ -32,7 +31,7 @@ class Claim(Base):
     admission_date = Column(Date, nullable=False)
     discharge_date = Column(Date, nullable=False)
     status = Column(ENUM(ClaimStatus, name="claim_status", create_type=False), nullable=False, default=ClaimStatus.SUBMITTED)
-    manual_approval_status = Column(ENUM(ManualApprovalStatus, name="manual_approval_status", create_type=False), nullable=False, default=ManualApprovalStatus.PENDING)
+
     total_billed = Column(Numeric(15, 2), nullable=False, default=0)
     total_insurer_payable = Column(Numeric(15, 2), nullable=False, default=0)
     total_member_payable = Column(Numeric(15, 2), nullable=False, default=0)

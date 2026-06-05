@@ -24,13 +24,10 @@ CREATE TYPE claim_type AS ENUM (
 );
 
 CREATE TYPE claim_status AS ENUM (
-    'SUBMITTED', 'VALIDATED', 'QUERY_RAISED', 'UNDER_REVIEW', 'ADJUDICATED',
+    'SUBMITTED', 'VALIDATED',
     'PENDING_APPROVAL', 'APPROVED', 'PARTIALLY_APPROVED', 'DENIED', 'PAID'
 );
 
-CREATE TYPE manual_approval_status AS ENUM (
-    'PENDING', 'APPROVED', 'OVERRIDDEN', 'REJECTED'
-);
 
 CREATE TYPE line_item_status AS ENUM (
     'APPROVED', 'DENIED', 'PARTIALLY_APPROVED', 'EXCLUDED'
@@ -131,7 +128,6 @@ CREATE TABLE claims (
     admission_date          DATE NOT NULL,
     discharge_date          DATE NOT NULL,
     status                  claim_status NOT NULL DEFAULT 'SUBMITTED',
-    manual_approval_status  manual_approval_status NOT NULL DEFAULT 'PENDING',
     total_billed            DECIMAL(15, 2) NOT NULL DEFAULT 0,
     total_insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0,
     total_member_payable    DECIMAL(15, 2) NOT NULL DEFAULT 0,

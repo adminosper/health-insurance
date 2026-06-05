@@ -40,23 +40,13 @@ class ClaimStatus(str, enum.Enum):
 
     SUBMITTED = "SUBMITTED"
     VALIDATED = "VALIDATED"
-    QUERY_RAISED = "QUERY_RAISED"
-    UNDER_REVIEW = "UNDER_REVIEW"
-    ADJUDICATED = "ADJUDICATED"
+
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
     PARTIALLY_APPROVED = "PARTIALLY_APPROVED"
     DENIED = "DENIED"
     PAID = "PAID"
 
-
-class ManualApprovalStatus(str, enum.Enum):
-    """Human approver decision states."""
-
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    OVERRIDDEN = "OVERRIDDEN"
-    REJECTED = "REJECTED"
 
 
 class LineItemStatus(str, enum.Enum):

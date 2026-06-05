@@ -30,8 +30,7 @@ REIMBURSEMENT | CASHLESS
 
 #### `ClaimStatus`
 ```
-SUBMITTED | VALIDATED | QUERY_RAISED | UNDER_REVIEW | ADJUDICATED |
-PENDING_APPROVAL | APPROVED | PARTIALLY_APPROVED | DENIED | PAID
+SUBMITTED | VALIDATED | PENDING_APPROVAL | APPROVED | PARTIALLY_APPROVED | DENIED | PAID
 ```
 
 #### `ManualApprovalStatus`
@@ -142,11 +141,11 @@ MALE | FEMALE | OTHER
 | `admission_date` | Date | NOT NULL | Date of hospital admission |
 | `discharge_date` | Date | NOT NULL | Date of hospital discharge |
 | `status` | ClaimStatus Enum | DEFAULT 'SUBMITTED' | Current pipeline state |
-| `manual_approval_status` | ManualApprovalStatus | DEFAULT 'PENDING' | Human approver's decision |
+| `documents_attached` | JSONB | DEFAULT '[]' | List of document types uploaded |
 | `total_billed` | Decimal | DEFAULT 0 | Sum of all line item billed amounts |
 | `total_insurer_payable` | Decimal | DEFAULT 0 | Sum after all rules applied |
 | `total_member_payable` | Decimal | DEFAULT 0 | Member's out-of-pocket liability |
-| `created_at` | Timestamp | DEFAULT NOW() | |
+| `created_at` | Timestamp | DEFAULT NOW() | Record creation time |
 
 #### `line_items`
 | Column | Type | Constraints | Description |
@@ -250,7 +249,7 @@ flowchart TD
     end
 
     subgraph APPROVAL["Approver (Internal)"]
-        N["Claim Status: PENDING_APPROVAL\nmanual_approval_status: PENDING"]
+        N["Claim Status: PENDING_APPROVAL"]
         O["GET /api/v1/admin/claims/{id}\nReview Full Audit Trail"]
         P{"Approver\nDecision"}
         Q["POST /api/v1/admin/claims/{id}/approve\naction: CONFIRM"]
@@ -264,8 +263,6 @@ flowchart TD
 
     subgraph REJECTION["Rejection Paths"]
         X1["Status: REJECTED\nPolicy validation failed"]
-        X2["Status: QUERY_RAISED\nPipeline halts.\nAwait doc resubmission"]
-        X3["Status: DENIED\nAll line items excluded/denied"]
         X4["Approver REJECTED\nRollback tentative\naccumulator reservations"]
     end
 
@@ -308,11 +305,11 @@ flowchart TD
 
 1. **Member submits** a claim with line items via `POST /api/v1/claims`.
 2. **Policy Validation** checks if the policy is active, member is enrolled, and filing is within deadline. Fails → `REJECTED`.
-3. **Document Verification** checks mandatory documents. Missing → `QUERY_RAISED` (pipeline halts until resubmission).
+3. **Document Verification** checks mandatory documents.
 4. **Adjudication Engine** runs the Rule Engine on each line item through 4 fixed phases: `EXCLUSION` → `CAPPING` → `COVERAGE` → `COST_SHARING`. Each phase logs its deductions to the line item's `audit_trail`.
 5. **Accumulator Update** tentatively reserves the approved amounts from the policy's sum insured and category buckets.
 6. **EOB Generation** builds the final Explanation of Benefits with per-line-item status and explanations.
-7. Claim halts at **`PENDING_APPROVAL`** with `manual_approval_status = PENDING`.
+7. Claim halts at **`PENDING_APPROVAL`**. Line items reflect the system's recommended statuses.
 8. **Approver reviews** the full audit trail via `GET /api/v1/admin/claims/{id}` and submits their decision via `POST /api/v1/admin/claims/{id}/approve`:
    - **CONFIRM** → Accept the engine's output as-is.
    - **OVERRIDE** → Adjust amounts/statuses with mandatory reason (logged in audit trail).

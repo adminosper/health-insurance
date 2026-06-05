@@ -11,8 +11,7 @@ from src.repositories import claims_repo
 from src.serializers.claims import ClaimStatusResponse
 from src.shared.enums import ClaimStatus
 
-# We will wire the adjudication engine in later phases.
-# from src.services.adjudication_engine.processor import process_claim
+from src.services.adjudication_engine.processor import process_claim
 
 router = APIRouter(prefix="/admin/claims", tags=["Admin Claims"])
 
@@ -55,7 +54,6 @@ def process_claim_endpoint(claim_id: uuid.UUID, db: Session = Depends(get_db)):
             detail=f"Only SUBMITTED claims can be processed. Current status: {db_claim.status.value}"
         )
 
-    # TODO: Wire Adjudication Engine here once built
-    # db_claim = process_claim(db=db, claim_id=claim_id)
+    db_claim = process_claim(db=db, claim_id=claim_id)
     
     return ClaimStatusResponse.model_validate(db_claim)
