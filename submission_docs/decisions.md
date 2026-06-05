@@ -44,3 +44,26 @@ Members need to submit claims electronically and track their adjudication status
 ### Assumptions
 * **Mocked Document Attachments**: The system does not process actual files or documents. Instead, documents are passed as a list of document type strings (validated against a finite set of allowed document enums, e.g., `"bills"`, `"receipts"`). In a production flow, we assume documents would need actual binary storage (e.g., S3), parsing/OCR, and manual validation audits to verify physical documents.
 
+---
+
+## 3. Sub-Process: Claim Processing
+
+### Why Required
+Once a claim is submitted, it must undergo complex medical rules adjudication, coverage validation, and financial calculations to determine the final insurer and member payable amounts. This process is complex and heavily data-driven, requiring a strict separation of concerns between state management (orchestration) and stateless logic evaluation (rules).
+
+For a high-level technical deep dive, please review the engine documentation first: [documentations/engines_architecture.md](file:///Users/shagunarora/Desktop/realfast-claim-processing-system/documentations/engines_architecture.md).
+
+### What Built
+* **Two-Engine Architecture**: We divided the processing into two distinct engines to maintain clean boundaries:
+  1. **Rule Engine**: A pure, stateless evaluator. It parses a custom JSON Domain Specific Language (DSL) to evaluate conditions (e.g., diagnosis matches, waiting periods) and executes financial mutations (EXCLUDE, LIMIT, COPAY, DEDUCTIBLE) on individual line items.
+  2. **Adjudication Engine (Pipeline)**: The stateful orchestrator. It fetches necessary database records, builds the flattened execution context, runs the sequential processing phases (`EXCLUSION` -> `CAPPING` -> `COVERAGE` -> `COST_SHARING`), manages in-memory accumulators across line items, and handles database persistence.
+* **Line Item Metadata Normalization**: Designed a metadata structure (`quantity` and `unit`) on line items. The Context Builder converts this into a standard `per_unit_amount` so that the Rule Engine doesn't have to understand different units of measure.
+* **Concurrent Claim Idempotency**: Handled cases where a claim is processed while another claim for the same policy is already `PENDING_APPROVAL`. The system computes the *effective* sum insured by pre-deducting amounts reserved by other pending claims, ensuring limits are never double-spent.
+
+### What We Didn't (Deferred) / V1 Limitations
+* **Cross-Line-Item Proportional Adjustments**: Our Rule Engine evaluates one line item at a time. It cannot handle complex rules like "If Room Rent exceeds limit, proportionally reduce all other associated line items by the same ratio." This would require a separate multi-item post-processing phase.
+* **Complex Multi-Claim Deductibles**: Family floater deductibles (where individuals and the family unit have intersecting thresholds) are simplified in V1 to a single policy-level tracker.
+* **Asynchronous Queueing System**: Although built decoupled, the actual processing is currently triggered via a synchronous admin endpoint for testing purposes. In production, a message broker (e.g., Kafka or RabbitMQ) would listen for `SUBMITTED` claims and process them via background workers.
+
+### Assumptions
+* **Execution Phase Ordering**: We assume a strict, hardcoded order of operations: `EXCLUSION` rules run first (to drop invalid items entirely), followed by `CAPPING` (per-item or category limits), then `COVERAGE` (overall policy sum insured limits), and finally `COST_SHARING` (copays and deductibles on the remaining covered amount).
