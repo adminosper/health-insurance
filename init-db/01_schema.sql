@@ -135,6 +135,7 @@ CREATE TABLE claims (
     total_billed            DECIMAL(15, 2) NOT NULL DEFAULT 0,
     total_insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0,
     total_member_payable    DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    documents_attached      JSONB NOT NULL DEFAULT '[]',
     created_at              TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 

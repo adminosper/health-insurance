@@ -92,3 +92,15 @@ class Gender(str, enum.Enum):
     MALE = "MALE"
     FEMALE = "FEMALE"
     OTHER = "OTHER"
+
+
+class DocumentType(str, enum.Enum):
+    """Allowed document types for a claim."""
+
+    BILLS = "BILLS"
+    RECEIPTS = "RECEIPTS"
+    DISCHARGE_SUMMARY = "DISCHARGE_SUMMARY"
+    CLAIM_FORM = "CLAIM_FORM"
+    PRESCRIPTIONS = "PRESCRIPTIONS"
+    DIAGNOSTIC_REPORTS = "DIAGNOSTIC_REPORTS"
+    OTHER = "OTHER"

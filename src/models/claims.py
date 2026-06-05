@@ -36,6 +36,7 @@ class Claim(Base):
     total_billed = Column(Numeric(15, 2), nullable=False, default=0)
     total_insurer_payable = Column(Numeric(15, 2), nullable=False, default=0)
     total_member_payable = Column(Numeric(15, 2), nullable=False, default=0)
+    documents_attached = Column(JSONB, nullable=False, default=list)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
 
 
