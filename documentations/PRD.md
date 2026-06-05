@@ -12,63 +12,186 @@
 
 The database design uses highly normalized tables for core entities and utilizes `JSONB` columns for flexible configurations (like rule conditions and dynamic accumulator buckets).
 
-### 2.1 Core Entities
-*   **`plans`**
-    *   `id` (PK, UUID)
-    *   `name` (String)
-    *   `created_at` (Timestamp)
-*   **`policies`**
-    *   `id` (PK, UUID)
-    *   `plan_id` (FK -> plans.id)
-    *   `tenure_start` (Date)
-    *   `tenure_end` (Date)
-    *   `policyholder_details` (JSONB - stores name, KYC, bank details)
-*   **`members`**
-    *   `id` (PK, UUID)
-    *   `policy_id` (FK -> policies.id)
-    *   `name` (String)
-    *   `age` (Integer)
-    *   `gender` (String)
-    *   `ped_list` (JSONB - array of pre-existing diagnosis codes)
-*   **`accumulators`**
-    *   `policy_id` (PK/FK -> policies.id)
-    *   `available_sum_insured` (Decimal)
-    *   `category_usage` (JSONB - map of specific usage, e.g., `{"DENTAL": 20000}`)
+### 2.1 Enums (Shared Value Sets)
 
-### 2.2 Rule Engine Configurations
-*(Note: Naming has been clarified from earlier designs to make the evaluation purpose explicit)*
-*   **`rules`**
-    *   `id` (PK, UUID)
-    *   `plan_id` (FK -> plans.id)
-    *   `name` (String)
-    *   `execution_phase` (String Enum: e.g., `EXCLUSION`, `CAPPING`, `COVERAGE`, `COST_SHARING`) - *Defines WHEN the rule runs.*
-    *   `priority` (Integer) - *Execution order within the phase.*
-    *   `condition` (JSONB) - *The generic DSL tree (e.g., {"field": "...", "operator": "EQ"}).*
-    *   `action_type` (String Enum: e.g., `LIMIT`, `EXCLUDE`, `COPAY`) - *Defines the specific mathematical handler to trigger.*
-    *   `action_config` (JSONB) - *The parameters for the handler (e.g., {"max_amount": 100000, "accumulator_key": "DENTAL"}).*
-    *   `is_active` (Boolean)
+These enums are the **single source of truth** for all valid values across the system. Rules, API payloads, and DB columns all reference these.
 
-### 2.3 Claim Transactions
-*   **`claims`**
-    *   `id` (PK, UUID)
-    *   `policy_id` (FK -> policies.id)
-    *   `member_id` (FK -> members.id)
-    *   `diagnosis_codes` (JSONB - Array of ICD-10 strings)
-    *   `claim_type` (String: `REIMBURSEMENT`, `CASHLESS`)
-    *   `status` (String Enum: `SUBMITTED`, `PENDING_APPROVAL`, `APPROVED`, `PARTIALLY_APPROVED`, `DENIED`, `PAID`)
-    *   `manual_approval_status` (String Enum: `PENDING`, `APPROVED`, `OVERRIDDEN`, `REJECTED`) - Default is `PENDING`.
-    *   `total_billed` (Decimal)
-    *   `total_insurer_payable` (Decimal)
-    *   `total_member_payable` (Decimal)
-*   **`line_items`**
-    *   `id` (PK, UUID)
-    *   `claim_id` (FK -> claims.id)
-    *   `service_category` (String: `ROOM_RENT`, `CONSULTATION`, `PHARMACY`, etc.)
-    *   `status` (String Enum: `APPROVED`, `DENIED`, `NEEDS_REVIEW`)
-    *   `billed_amount` (Decimal)
-    *   `allowed_amount` (Decimal)
-    *   `insurer_payable` (Decimal)
-    *   `audit_trail` (JSONB - Array of adjustment records tracking the math, rule logic, and EOB explanation for this specific line item)
+#### `ServiceCategory`
+Defines the valid categories for a line item on a hospital bill.
+```
+ROOM_RENT | ICU_CHARGES | CONSULTATION | OT_CHARGES | PHARMACY |
+DIAGNOSTICS | DENTAL | AYUSH | CONSUMABLES | COSMETIC | COSMETIC_SURGERY | SURGERY | OTHER
+```
+
+#### `ClaimType`
+```
+REIMBURSEMENT | CASHLESS
+```
+
+#### `ClaimStatus`
+```
+SUBMITTED | VALIDATED | QUERY_RAISED | UNDER_REVIEW | ADJUDICATED |
+PENDING_APPROVAL | APPROVED | PARTIALLY_APPROVED | DENIED | PAID
+```
+
+#### `ManualApprovalStatus`
+```
+PENDING | APPROVED | OVERRIDDEN | REJECTED
+```
+
+#### `LineItemStatus`
+```
+APPROVED | DENIED | PARTIALLY_APPROVED | EXCLUDED
+```
+
+#### `ExecutionPhase`
+The fixed-order pipeline phases for rule evaluation.
+```
+EXCLUSION | CAPPING | COVERAGE | COST_SHARING
+```
+
+#### `ActionType`
+The specific financial handler a rule triggers.
+```
+EXCLUDE | LIMIT | COPAY | DEDUCTIBLE
+```
+
+#### `Gender`
+```
+MALE | FEMALE | OTHER
+```
+
+---
+
+### 2.2 Core Entities
+
+#### `plans`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique plan identifier |
+| `name` | String | NOT NULL | Product name (e.g., "General Health Plan") |
+| `description` | Text | | Brief description of the plan's coverage scope |
+| `allowed_sum_insured_options` | JSONB | NOT NULL | Array of SI tiers (e.g., `[500000, 1000000, 2500000]`) |
+| `is_active` | Boolean | DEFAULT true | Whether this plan is currently sold |
+| `created_at` | Timestamp | DEFAULT NOW() | Record creation time |
+
+#### `policies`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique policy contract identifier |
+| `plan_id` | UUID | FK → plans.id, NOT NULL | Which plan blueprint this policy uses |
+| `chosen_sum_insured` | Decimal | NOT NULL | The SI tier the customer selected from the plan's options |
+| `tenure_start` | Date | NOT NULL | Policy start date |
+| `tenure_end` | Date | NOT NULL | Policy end date |
+| `policyholder_name` | String | NOT NULL | Legal name of the contract owner |
+| `policyholder_contact` | JSONB | | `{"mobile": "...", "email": "..."}` |
+| `policyholder_kyc` | JSONB | | `{"pan": "...", "aadhaar": "..."}` |
+| `bank_account_details` | JSONB | | `{"account_holder": "...", "bank_name": "...", "account_number": "...", "ifsc_code": "..."}` |
+| `created_at` | Timestamp | DEFAULT NOW() | |
+
+#### `members`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique member identifier |
+| `policy_id` | UUID | FK → policies.id, NOT NULL | Policy this member is covered under |
+| `full_name` | String | NOT NULL | Member's legal name |
+| `date_of_birth` | Date | NOT NULL | Used to compute age dynamically |
+| `gender` | Gender Enum | NOT NULL | `MALE`, `FEMALE`, `OTHER` |
+| `relationship` | String | NOT NULL | Relationship to policyholder: `SELF`, `SPOUSE`, `CHILD`, `PARENT` |
+| `ped_list` | JSONB | DEFAULT '[]' | Array of pre-existing disease ICD-10 codes |
+
+#### `accumulators`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `policy_id` | UUID | PK, FK → policies.id | One accumulator record per policy |
+| `available_sum_insured` | Decimal | NOT NULL | Remaining SI balance |
+| `accumulated_ncb` | Decimal | DEFAULT 0 | No Claim Bonus earned so far |
+| `active_deductible_paid` | Decimal | DEFAULT 0 | Deductible paid by member this policy year |
+| `category_usage` | JSONB | DEFAULT '{}' | Map of category-level usage: `{"DENTAL": 20000, "AYUSH": 0}` |
+
+---
+
+### 2.3 Rule Engine Configurations
+
+#### `rules`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique rule identifier |
+| `plan_id` | UUID | FK → plans.id, NOT NULL | Plan this rule belongs to |
+| `name` | String | NOT NULL | Human-readable rule name |
+| `execution_phase` | ExecutionPhase Enum | NOT NULL | `EXCLUSION`, `CAPPING`, `COVERAGE`, `COST_SHARING` |
+| `priority` | Integer | NOT NULL | Execution order within phase (lower = first) |
+| `condition` | JSONB | NOT NULL | Generic DSL condition tree |
+| `action_type` | ActionType Enum | NOT NULL | `EXCLUDE`, `LIMIT`, `COPAY`, `DEDUCTIBLE` |
+| `action_config` | JSONB | NOT NULL | Parameters for the handler |
+| `is_active` | Boolean | DEFAULT true | Toggle rule on/off |
+
+---
+
+### 2.4 Claim Transactions
+
+#### `claims`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique claim identifier |
+| `policy_id` | UUID | FK → policies.id, NOT NULL | Policy being claimed against |
+| `member_id` | UUID | FK → members.id, NOT NULL | Member who received treatment |
+| `diagnosis_codes` | JSONB | NOT NULL | Array of ICD-10 strings (e.g., `["I21", "E11.9"]`) |
+| `claim_type` | ClaimType Enum | NOT NULL | `REIMBURSEMENT` or `CASHLESS` |
+| `is_accident` | Boolean | DEFAULT false | Exempts from initial waiting period |
+| `admission_date` | Date | NOT NULL | Date of hospital admission |
+| `discharge_date` | Date | NOT NULL | Date of hospital discharge |
+| `status` | ClaimStatus Enum | DEFAULT 'SUBMITTED' | Current pipeline state |
+| `manual_approval_status` | ManualApprovalStatus | DEFAULT 'PENDING' | Human approver's decision |
+| `total_billed` | Decimal | DEFAULT 0 | Sum of all line item billed amounts |
+| `total_insurer_payable` | Decimal | DEFAULT 0 | Sum after all rules applied |
+| `total_member_payable` | Decimal | DEFAULT 0 | Member's out-of-pocket liability |
+| `created_at` | Timestamp | DEFAULT NOW() | |
+
+#### `line_items`
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | UUID | PK | Unique line item identifier |
+| `claim_id` | UUID | FK → claims.id, NOT NULL | Parent claim |
+| `service_category` | ServiceCategory Enum | NOT NULL | `ROOM_RENT`, `ICU_CHARGES`, etc. |
+| `billed_amount` | Decimal | NOT NULL | Original hospital charge |
+| `allowed_amount` | Decimal | DEFAULT 0 | Amount after capping/exclusions |
+| `insurer_payable` | Decimal | DEFAULT 0 | Final amount insurer pays |
+| `status` | LineItemStatus Enum | DEFAULT 'APPROVED' | Per-item adjudication outcome |
+| `audit_trail` | JSONB | DEFAULT '[]' | Ordered array of adjustment records |
+
+---
+
+### 2.5 Rule Engine Context Object
+
+This is the **flattened key-value map** built by the application layer before passing to the rule engine. **Every field a rule condition can reference MUST exist in this schema.** This is the contract between the rule definitions and the engine.
+
+| Context Key | Source | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `policy.plan_id` | `policies.plan_id` | UUID | Plan blueprint ID |
+| `policy.chosen_sum_insured` | `policies.chosen_sum_insured` | Decimal | Customer's selected SI tier |
+| `policy.tenure_start` | `policies.tenure_start` | Date | Policy start date |
+| `policy.tenure_end` | `policies.tenure_end` | Date | Policy end date |
+| `member.age` | **Computed** from `members.date_of_birth` | Integer | Member's current age |
+| `member.gender` | `members.gender` | String | `MALE`, `FEMALE`, `OTHER` |
+| `member.ped_codes` | `members.ped_list` | Array[String] | Pre-existing disease ICD-10 codes |
+| `member.days_active` | **Computed** from `policies.tenure_start` | Integer | Days since policy started |
+| `member.relationship` | `members.relationship` | String | `SELF`, `SPOUSE`, `CHILD`, `PARENT` |
+| `claim.diagnosis_codes` | `claims.diagnosis_codes` | Array[String] | ICD-10 codes for this claim |
+| `claim.is_accident` | `claims.is_accident` | Boolean | Whether claim is accident-related |
+| `claim.admission_date` | `claims.admission_date` | Date | Admission date |
+| `claim.discharge_date` | `claims.discharge_date` | Date | Discharge date |
+| `claim.claim_type` | `claims.claim_type` | String | `REIMBURSEMENT` or `CASHLESS` |
+| `line_item.service_category` | `line_items.service_category` | String | `ROOM_RENT`, `PHARMACY`, etc. |
+| `line_item.billed_amount` | `line_items.billed_amount` | Decimal | Original charge for this item |
+| `accumulator.available_sum_insured` | `accumulators.available_sum_insured` | Decimal | Remaining SI |
+| `accumulator.category_usage` | `accumulators.category_usage` | Map | `{"DENTAL": 20000, ...}` |
+| `accumulator.active_deductible_paid` | `accumulators.active_deductible_paid` | Decimal | Deductible paid so far |
+
+#### Computed Fields (Not Stored, Derived at Runtime)
+*   `member.age` = `(current_date - members.date_of_birth).years`
+*   `member.days_active` = `(current_date - policies.tenure_start).days`
+
 
 ---
 
