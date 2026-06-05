@@ -104,3 +104,39 @@ class DocumentType(str, enum.Enum):
     PRESCRIPTIONS = "PRESCRIPTIONS"
     DIAGNOSTIC_REPORTS = "DIAGNOSTIC_REPORTS"
     OTHER = "OTHER"
+
+
+class LineItemUnit(str, enum.Enum):
+    """Standard unit vocabulary for line item metadata.
+
+    Used in the line_items.metadata JSONB field to describe the
+    measurement unit of the billed service. The Context Builder uses
+    this alongside 'quantity' to compute derived fields like
+    per_unit_amount.
+
+    Metadata schema:
+        {
+            "quantity": <int>,       # Number of units billed (default 1)
+            "unit": <LineItemUnit>   # Measurement unit
+        }
+
+    Examples by service category:
+        ROOM_RENT    → {"quantity": 8, "unit": "DAY"}
+        ICU_CHARGES  → {"quantity": 3, "unit": "DAY"}
+        NURSING      → {"quantity": 10, "unit": "SHIFT"}
+        PHYSIOTHERAPY→ {"quantity": 12, "unit": "SESSION"}
+        MEDICINE     → {"quantity": 5, "unit": "STRIP"}
+        DIAGNOSTICS  → {"quantity": 3, "unit": "TEST"}
+        SURGERY      → {} (atomic — no decomposition needed)
+        CONSULTATION → {"quantity": 1, "unit": "VISIT"} or {}
+    """
+
+    DAY = "DAY"
+    HOUR = "HOUR"
+    SESSION = "SESSION"
+    VISIT = "VISIT"
+    TEST = "TEST"
+    STRIP = "STRIP"
+    UNIT = "UNIT"
+    SHIFT = "SHIFT"
+

@@ -51,5 +51,6 @@ class LineItem(Base):
     billed_amount = Column(Numeric(15, 2), nullable=False)
     allowed_amount = Column(Numeric(15, 2), nullable=False, default=0)
     insurer_payable = Column(Numeric(15, 2), nullable=False, default=0)
+    line_item_metadata = Column("metadata", JSONB, nullable=False, default=dict)
     status = Column(ENUM(LineItemStatus, name="line_item_status", create_type=False), nullable=False, default=LineItemStatus.APPROVED)
     audit_trail = Column(JSONB, nullable=False, default=list)

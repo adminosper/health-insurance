@@ -13,7 +13,19 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
-from src.shared.enums import ClaimStatus, ClaimType, DocumentType, ServiceCategory
+from src.shared.enums import ClaimStatus, ClaimType, DocumentType, LineItemUnit, ServiceCategory
+
+
+class LineItemMetadata(BaseModel):
+    """Structured metadata for a line item.
+
+    Captures quantity and unit information for services that are billed
+    in aggregate (e.g. room rent for 8 days, 12 physiotherapy sessions).
+    For atomic services like surgery, metadata can be omitted or left empty.
+    """
+
+    quantity: int = Field(1, ge=1, description="Number of units billed.")
+    unit: LineItemUnit = Field(LineItemUnit.UNIT, description="Measurement unit for the billed service.")
 
 
 class LineItemPayload(BaseModel):
@@ -21,6 +33,7 @@ class LineItemPayload(BaseModel):
 
     service_category: ServiceCategory
     billed_amount: Decimal = Field(..., gt=0, description="Amount billed by the hospital.")
+    metadata: LineItemMetadata = Field(default_factory=LineItemMetadata, description="Optional quantity/unit details.")
 
 
 class ClaimSubmitRequest(BaseModel):

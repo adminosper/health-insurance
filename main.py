@@ -7,10 +7,12 @@ from src.models import plans as plan_models
 from src.models import policies as policy_models
 from src.models import rules as rule_models
 from src.routes.claims import router as claims_router
+from src.routes.admin_claims import router as admin_claims_router
 
 app = FastAPI(title="Claims Processing System API")
 
 app.include_router(claims_router, prefix="/api/v1")
+app.include_router(admin_claims_router, prefix="/api/v1")
 
 @app.get("/")
 def read_root():

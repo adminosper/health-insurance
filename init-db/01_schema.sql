@@ -147,6 +147,7 @@ CREATE TABLE line_items (
     billed_amount     DECIMAL(15, 2) NOT NULL,
     allowed_amount    DECIMAL(15, 2) NOT NULL DEFAULT 0,
     insurer_payable   DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    metadata          JSONB NOT NULL DEFAULT '{}',
     status            line_item_status NOT NULL DEFAULT 'APPROVED',
     audit_trail       JSONB NOT NULL DEFAULT '[]'
 );
