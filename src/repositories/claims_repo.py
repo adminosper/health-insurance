@@ -81,3 +81,17 @@ def get_pending_approval_payable_sum(db: Session, policy_id: uuid.UUID, exclude_
     return total or Decimal(0)
 
 
+def has_pending_claims_for_policy(db: Session, policy_id: uuid.UUID, exclude_claim_id: Optional[uuid.UUID] = None) -> bool:
+    """Check if the policy has any claims in PENDING_APPROVAL status.
+    
+    This is used to prevent concurrent processing of claims that could lead to
+    race conditions in dynamic effective balance calculations.
+    """
+    query = db.query(Claim).filter(
+        Claim.policy_id == policy_id,
+        Claim.status == ClaimStatus.PENDING_APPROVAL
+    )
+    if exclude_claim_id:
+        query = query.filter(Claim.id != exclude_claim_id)
+        
+    return db.query(query.exists()).scalar()

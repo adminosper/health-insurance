@@ -99,7 +99,34 @@ Now that the Adjudication Engine has mathematically processed the claim, a revie
 **Desired Output:**
 You will receive a detailed JSON response showing the `total_billed`, `total_insurer_payable`, and a `line_items` array. Inside each line item, you'll see a pristine `audit_trail` array that tracks every rule that impacted the financials (e.g., Room Rent Capping, Copays) with explicit `amount_adjusted` values and `reason_codes`!
 
-### Step 4: Verify the Database (Optional)
+### Step 4: Admin Manual Review
+Once a claim has been adjudicated and is sitting in the `PENDING_APPROVAL` state, an administrator can manually review it and make a final decision to either APPROVE or REJECT the claim.
+
+**Endpoint:** `POST http://localhost:8000/api/v1/admin/claims/{claim_id}/review`
+
+**Request Body (JSON):**
+```json
+{
+  "action": "APPROVE",
+  "notes": "Looks good, all rules applied correctly."
+}
+```
+
+**Desired Output:**
+You will receive a `200 OK` response with the claim status updated to **`APPROVED`** (or `PARTIALLY_APPROVED`).
+Crucially, *this is the exact moment* the physical database accumulators are hard-debited. The `available_sum_insured` drops, and `category_usage` is incremented.
+*(Note: If you pass `"action": "REJECT"`, the claim is marked `DENIED` and the pending limits are instantly un-locked for the next claim!)*
+
+### Step 5: Revert a Manual Decision (Rollback)
+If an admin made a mistake or a member raises a dispute, the system supports a robust atomic rollback mechanism. 
+
+**Endpoint:** `POST http://localhost:8000/api/v1/admin/claims/{claim_id}/revert`
+
+**Desired Output:**
+You will receive a `200 OK` response with the claim status updated back to **`PENDING_APPROVAL`**.
+Under the hood, the Engine securely untangles and reverses the physical accumulator math, transitions the claim to `SUBMITTED`, and then instantly runs `process_claim` again to dynamically re-adjudicate the claim against the latest policy limits!
+
+### Step 6: Verify the Database (Optional)
 If you want to see how this translates to raw database state:
 
 1. Log into the Docker database container:
@@ -124,4 +151,4 @@ To verify the complex domain logic without making API calls, you can run our com
    # Run from the root directory
    PYTHONPATH=. pytest tests/ -v
    ```
-2. **Desired Output:** All 27 tests (Domain and Unit tests) should pass, proving the isolation between the Stateless Rule Evaluator and the Stateful Adjudication Orchestrator.
+2. **Desired Output:** All 38 tests (Domain and Unit tests) should pass, proving the isolation between the Stateless Rule Evaluator and the Stateful Adjudication Orchestrator, as well as testing manual review limits math.

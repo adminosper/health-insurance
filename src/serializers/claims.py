@@ -7,6 +7,7 @@ and status tracking.
 from __future__ import annotations
 
 import uuid
+import enum
 from datetime import date
 from decimal import Decimal
 from typing import List
@@ -60,3 +61,17 @@ class ClaimStatusResponse(BaseModel):
     total_member_payable: Decimal
 
     model_config = {"from_attributes": True}
+
+
+class ReviewAction(str, enum.Enum):
+    """The action taken by an admin during manual review."""
+
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+
+
+class ClaimReviewRequest(BaseModel):
+    """Payload for manually approving or rejecting a claim."""
+
+    action: ReviewAction
+    notes: str = ""

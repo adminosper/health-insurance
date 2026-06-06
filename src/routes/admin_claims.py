@@ -11,7 +11,8 @@ from src.repositories import claims_repo
 from src.serializers.claims import ClaimStatusResponse
 from src.shared.enums import ClaimStatus
 
-from src.services.adjudication_engine.processor import process_claim
+from src.services.adjudication_engine.processor import process_claim, execute_manual_review, execute_revert_decision
+from src.serializers.claims import ClaimStatusResponse, ClaimReviewRequest
 
 router = APIRouter(prefix="/admin/claims", tags=["Admin Claims"])
 
@@ -57,3 +58,45 @@ def process_claim_endpoint(claim_id: uuid.UUID, db: Session = Depends(get_db)):
     db_claim = process_claim(db=db, claim_id=claim_id)
     
     return ClaimStatusResponse.model_validate(db_claim)
+
+
+@router.post(
+    "/{claim_id}/review",
+    response_model=ClaimStatusResponse,
+    summary="Admin review for a PENDING_APPROVAL claim",
+)
+def review_claim_endpoint(claim_id: uuid.UUID, request: ClaimReviewRequest, db: Session = Depends(get_db)):
+    """Execute manual review decision on a PENDING_APPROVAL claim.
+    
+    Admins can APPROVE or REJECT a claim. If APPROVED, the accumulators are physically hard-debited.
+    """
+    try:
+        db_claim = execute_manual_review(db=db, claim_id=claim_id, request=request)
+        return ClaimStatusResponse.model_validate(db_claim)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(e)
+        )
+
+
+@router.post(
+    "/{claim_id}/revert",
+    response_model=ClaimStatusResponse,
+    summary="Revert a manual review decision and re-adjudicate",
+)
+def revert_claim_endpoint(claim_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Revert a manual review decision.
+    
+    This un-does any physical accumulator debits made during APPROVE, 
+    transitions the claim back to SUBMITTED, and instantly runs the 
+    adjudication pipeline again to perfectly capture the current state of the limits.
+    """
+    try:
+        db_claim = execute_revert_decision(db=db, claim_id=claim_id)
+        return ClaimStatusResponse.model_validate(db_claim)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(e)
+        )
