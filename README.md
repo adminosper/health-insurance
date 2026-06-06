@@ -5,9 +5,9 @@ Welcome to the **RealFast Claim Processing Adjudication Engine**. This repositor
 ## Context & Documentation
 Before diving into the code, we highly recommend reading the following architectural and design documents to understand the system's "why" and "how":
 
-* **Product Requirements**: [documentations/PRD.md](./documentations/PRD.md)
-* **Detailed Claim Processing Decisions**: [submission_docs/decisions.md](./submission_docs/decisions.md)
-* **Engines Architecture (The Core)**: [documentations/engines_architecture.md](./documentations/engines_architecture.md)
+* **Product Requirements**: [app/documentations/PRD.md](./app/documentations/PRD.md)
+* **Detailed Claim Processing Decisions**: [docs/decisions.md](./docs/decisions.md)
+* **Engines Architecture (The Core)**: [app/documentations/engines_architecture.md](./app/documentations/engines_architecture.md)
 
 ## Prerequisites
 To run and test this system locally, you only need:
@@ -16,8 +16,11 @@ To run and test this system locally, you only need:
 
 ## Setup Flow
 
-1. **Clone the repository and navigate into the folder.**
-2. **Create a `.env` file** in the root directory to provide the encryption key used for securing HPII details (Health Protected Identifiable Information). You can use this pre-generated dummy key for testing:
+1. **Clone the repository and navigate into the `app/` folder:**
+   ```bash
+   cd app
+   ```
+2. **Create a `.env` file** in the `app/` directory to provide the encryption key used for securing HPII details (Health Protected Identifiable Information). You can use this pre-generated dummy key for testing:
    ```bash
    echo 'ENCRYPTION_KEY="TnpHcl9MNEp0Wkp3cEtLZDRfU3pBcU9pQ1JXY2hwQzM="' > .env
    ```
@@ -155,7 +158,7 @@ If you want to see how this translates to raw database state:
 
 1. Log into the Docker database container:
    ```bash
-   docker exec -it realfast-claim-processing-system-db-1 psql -U postgres -d health_insurance
+   docker exec -it app-db-1 psql -U postgres -d health_insurance
    ```
 2. Query the line items for your claim:
    ```sql
@@ -172,7 +175,8 @@ To verify the complex domain logic without making API calls, you can run our com
 
 1. Ensure your Python environment is set up (or run this inside the API docker container):
    ```bash
-   # Run from the root directory
+   # Navigate into the app folder first
+   cd app
    PYTHONPATH=. pytest tests/ -v
    ```
 2. **Desired Output:** All 38 tests (Domain and Unit tests) should pass, proving the isolation between the Stateless Rule Evaluator and the Stateful Adjudication Orchestrator, as well as testing manual review limits math.
