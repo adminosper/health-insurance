@@ -1,0 +1,104 @@
+
+## Entities (Our Domain Model)
+
+| Entity | Role | Static or Stateful |
+| :--- | :--- | :--- |
+| **Plan** | Blueprint of rules (coverage categories, limits, exclusions, cost-sharing) | Static |
+| **Policy** | A purchased contract linking a Plan to a Policyholder with a chosen Sum Insured | Stateful (accumulators) |
+| **Member** | An individual covered under a Policy | Static (but has PED list) |
+| **Claim** | A submitted request for reimbursement, tied to a Policy + Member | Stateful (lifecycle) |
+| **Line Item** | A single billed service within a Claim | Stateful (lifecycle) |
+| **Coverage Rule** | A configurable rule attached to a Plan that defines limits per service category | Static |
+
+---
+
+## Sub-Processes (The System's Core Operations)
+
+### SP-1: Claim Submission
+*   Accept a claim with member_id, policy_id, diagnosis_code, hospital details, and a list of line items (each with service_category + billed_amount).
+*   Validate: Is the policy active? Is the member enrolled? Is the filing within the deadline?
+
+### SP-2: Adjudication Engine (The Heart of the System)
+This is where all the rules fire. For each line item, the engine runs checks **in order**:
+1.  **Exclusion Check:** Is this service permanently excluded? Is there an unmet waiting period?
+2.  **Capping Check:** Does this line item exceed a sub-limit or room-rent cap?
+3.  **Sum Insured Balance Check:** Is there enough remaining coverage?
+4.  **Cost-Sharing Calculation:** Apply deductible first, then copay/coinsurance on the allowed amount.
+5.  **Generate Explanation:** Record the reason for every deduction or denial.
+
+### SP-3: State Machine Management
+*   **Claim-level states:** `Submitted → Under Review → Approved / Partially Approved / Denied → Paid → Disputed`
+*   **Line-item-level states:** `Pending → Approved / Denied / Needs Review`
+*   A Claim's overall status is **derived** from its line items (e.g., if 3 approved + 1 denied = Partially Approved).
+
+### SP-4: Accumulator Updates
+*   After adjudication, update the Policy's stateful accumulators:
+    *   Deduct `insurer_payable` from `available_sum_insured`.
+    *   Track category-specific usage (e.g., "3 of 10 physio visits used").
+    *   Track deductible progress.
+
+### SP-5: EOB (Explanation of Benefits) Generation
+*   Produce a per-claim document showing: Billed → Allowed → Insurer Paid → Member Pays → Reason for each line item.
+
+### SP-6: Dispute Handling
+*   Allow a member to dispute a decided claim with a reason text.
+*   Transition claim to `Disputed` status.
+*   Allow resolution (Upheld with top-up payment, or Rejected with explanation).
+
+---
+
+## Final Requirements (Bullet Points)
+
+### Must-Have (Core)
+- [ ] Seed data for Plans with configurable coverage rules (service categories, limits, exclusions)
+- [ ] Seed data for Policies with members, chosen sum insured, and accumulators
+- [ ] API to submit a claim with multiple line items
+- [ ] Adjudication engine that evaluates each line item against plan rules
+- [ ] Per-line-item explanations for every approve/deny decision
+- [ ] State machine for claims (Submitted → Under Review → Approved/Denied → Paid)
+- [ ] State machine for line items (Pending → Approved/Denied)
+- [ ] Partial approval handling (mixed line-item outcomes on a single claim)
+- [ ] Accumulator tracking (remaining sum insured, category usage limits)
+- [ ] Dispute submission and resolution flow
+- [ ] EOB generation (claim-level summary with per-line-item breakdown)
+
+### Should-Have (Depth & Edge Cases)
+- [ ] Deductible tracking and application across multiple claims in a year
+- [ ] Room rent capping with proportionate deduction on associated charges
+- [ ] Waiting period validation (initial 30-day, specific disease, PED)
+- [ ] Family floater: shared sum insured pool across members
+- [ ] Idempotency on claim submission (prevent duplicate claims)
+
+### Nice-to-Have (Polish)
+- [ ] NCB calculation at policy renewal
+- [ ] Restore benefit trigger on sum insured exhaustion
+- [ ] Pre/post hospitalization date window validation
+
+---
+
+## Sub-Problems Requiring Careful Design Thinking
+
+### 🔴 1. Coverage Rule Representation
+*The problem statement explicitly calls this out.* How do we model rules like "Dental is covered up to ₹1 Lakh/year" or "Consumables are excluded"?
+*   **Options:** Hardcoded logic, JSON config per plan, a mini DSL, or a Rule table in the DB.
+*   **Recommendation:** JSON-based rule configs stored per Plan, interpreted by a generic rule engine. Extensible without code changes.
+
+### 🔴 2. Claim vs. Line Item State Machine
+*   A Claim has 5 line items. 3 Approved, 1 Denied, 1 Needs Review. What is the Claim's status?
+*   **Design Decision:** The Claim status should be **derived** from its line items using clear precedence rules (e.g., any `Needs Review` → Claim is `Under Review`; mix of Approved/Denied → `Partially Approved`).
+
+### 🔴 3. Accumulator Consistency
+*   Two claims for the same member are submitted simultaneously. Both check `available_sum_insured = ₹1 Lakh`. Both try to approve ₹80K. Race condition → overpayment.
+*   **Design Decision:** Process claims sequentially per policy (pessimistic locking or a queue), or use optimistic concurrency with version checks.
+
+### 🔴 4. Adjudication Rule Ordering
+*   The order in which rules fire matters. If you apply the deductible *before* the room-rent cap, the math changes vs. applying it *after*.
+*   **Design Decision:** Define a fixed, documented pipeline order (Exclusions → Capping → Sum Insured Check → Cost-Sharing).
+
+### 🔴 5. Explanation Generation
+*   Each deduction must produce a human-readable reason. The system needs to collect explanations as a side-effect of each rule execution, not as an afterthought.
+*   **Design Decision:** Each rule in the pipeline should return a structured `{ amount_adjusted, reason_code, explanation_text }` result.
+
+---
+
+This is the plan. What would you like to discuss, challenge, or refine before we start building?
