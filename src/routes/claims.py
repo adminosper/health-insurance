@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from src.database.connection import get_db
 from src.serializers.claims import ClaimStatusResponse, ClaimSubmitRequest
-from src.services import claim_service
+from src.serializers.disputes import DisputeCreateRequest, DisputeResponse
+from src.services import claim_service, dispute_service
 
 router = APIRouter(prefix="/claims", tags=["Member Claims"])
 
@@ -62,3 +63,27 @@ def get_claim_eob(claim_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found.")
     
     return eob_response
+
+
+@router.post(
+    "/{claim_id}/disputes",
+    response_model=DisputeResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Raise a dispute for a claim",
+)
+def raise_dispute(claim_id: uuid.UUID, request: DisputeCreateRequest, db: Session = Depends(get_db)):
+    """Raise a dispute for a fully adjudicated and manually reviewed claim."""
+    try:
+        return dispute_service.raise_dispute(
+            db=db, 
+            claim_id=claim_id, 
+            member_id=request.member_id, 
+            reason=request.reason
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while raising the dispute.",
+        )

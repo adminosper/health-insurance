@@ -15,6 +15,7 @@ from src.shared.enums import (
     ClaimType,
     LineItemStatus,
     ServiceCategory,
+    DisputeStatus
 )
 
 
@@ -54,3 +55,17 @@ class LineItem(Base):
     line_item_metadata = Column("metadata", JSONB, nullable=False, default=dict)
     status = Column(ENUM(LineItemStatus, name="line_item_status", create_type=False), nullable=False, default=LineItemStatus.SUBMITTED)
     audit_trail = Column(JSONB, nullable=False, default=list)
+
+
+class Dispute(Base):
+    """Member initiated dispute for an adjudicated claim."""
+
+    __tablename__ = "disputes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    claim_id = Column(UUID(as_uuid=True), ForeignKey("claims.id"), nullable=False)
+    member_id = Column(UUID(as_uuid=True), ForeignKey("members.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    
+    status = Column(ENUM(DisputeStatus, name="dispute_status", create_type=False), nullable=False, default=DisputeStatus.RAISED)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)

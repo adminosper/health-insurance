@@ -48,6 +48,12 @@ class ClaimStatus(str, enum.Enum):
     PAID = "PAID"
 
 
+class DisputeStatus(str, enum.Enum):
+    """Lifecycle states of a member-initiated dispute."""
+
+    RAISED = "RAISED"
+    UNDER_PROCESSING = "UNDER_PROCESSING"
+    RESOLVED = "RESOLVED"
 
 class LineItemStatus(str, enum.Enum):
     """Per-line-item adjudication outcome."""

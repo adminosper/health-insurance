@@ -29,6 +29,10 @@ CREATE TYPE claim_status AS ENUM (
 );
 
 
+CREATE TYPE dispute_status AS ENUM (
+    'RAISED', 'UNDER_PROCESSING', 'RESOLVED'
+);
+
 CREATE TYPE line_item_status AS ENUM (
     'SUBMITTED', 'APPROVED', 'DENIED', 'PARTIALLY_APPROVED', 'EXCLUDED'
 );
@@ -150,3 +154,16 @@ CREATE TABLE line_items (
 
 -- Index for fast line item lookup by claim
 CREATE INDEX idx_line_items_claim_id ON line_items (claim_id);
+
+-- Disputes: Member initiated dispute on an adjudicated claim
+CREATE TABLE disputes (
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    claim_id          UUID NOT NULL REFERENCES claims(id),
+    member_id         UUID NOT NULL REFERENCES members(id),
+    reason            TEXT NOT NULL,
+    status            dispute_status NOT NULL DEFAULT 'RAISED',
+    created_at        TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Index for fast dispute lookup by claim
+CREATE INDEX idx_disputes_claim_id ON disputes (claim_id);

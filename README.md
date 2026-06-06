@@ -126,7 +126,31 @@ If an admin made a mistake or a member raises a dispute, the system supports a r
 You will receive a `200 OK` response with the claim status updated back to **`PENDING_APPROVAL`**.
 Under the hood, the Engine securely untangles and reverses the physical accumulator math, transitions the claim to `SUBMITTED`, and then instantly runs `process_claim` again to dynamically re-adjudicate the claim against the latest policy limits!
 
-### Step 6: Verify the Database (Optional)
+### Step 6: Member Disputes Workflow
+If a member disagrees with the final adjudication decision (e.g. the cap is too low, or a rule was incorrectly applied), they can raise a formal dispute.
+
+**Endpoint:** `POST http://localhost:8000/api/v1/claims/{claim_id}/disputes`
+
+**Request Body (JSON):**
+```json
+{
+  "member_id": "d1b2c3d4-0001-4000-8000-000000000001",
+  "reason": "The room rent capping was incorrectly applied as I have a corporate waiver."
+}
+```
+
+**Desired Output:**
+You will receive a `201 Created` response with the dispute `status` as **`RAISED`**. 
+*Note: A dispute can ONLY be raised on claims that have already been manually reviewed (`APPROVED`, `PARTIALLY_APPROVED`, or `DENIED`).*
+
+**Admin Dispute Lifecycle (Not fully built in V1):**
+In a complete production environment, the following workflow occurs:
+1. **Notification**: The Admin queue is notified of the `RAISED` dispute.
+2. **Investigation**: An admin picks up the dispute, and updates the status to **`UNDER_PROCESSING`** via `POST /api/v1/admin/disputes/{dispute_id}/status`.
+3. **Revert & Fix**: If the admin decides the member is right, they will use the Revert endpoint (`POST /admin/claims/{claim_id}/revert`) to untangle the math, manually adjust the claim or policy configuration, and re-adjudicate.
+4. **Resolution**: The admin updates the dispute status to **`RESOLVED`**.
+
+### Step 7: Verify the Database (Optional)
 If you want to see how this translates to raw database state:
 
 1. Log into the Docker database container:

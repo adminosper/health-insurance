@@ -13,6 +13,8 @@ from src.shared.enums import ClaimStatus
 
 from src.services.adjudication_engine.processor import process_claim, execute_manual_review, execute_revert_decision
 from src.serializers.claims import ClaimStatusResponse, ClaimReviewRequest
+from src.serializers.disputes import DisputeStatusUpdateRequest, DisputeResponse
+from src.services import dispute_service
 
 router = APIRouter(prefix="/admin/claims", tags=["Admin Claims"])
 
@@ -99,4 +101,26 @@ def revert_claim_endpoint(claim_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=str(e)
+        )
+
+
+@router.post(
+    "/disputes/{dispute_id}/status",
+    response_model=DisputeResponse,
+    summary="Update the status of a dispute",
+)
+def update_dispute_status(dispute_id: uuid.UUID, request: DisputeStatusUpdateRequest, db: Session = Depends(get_db)):
+    """Update the status of a member dispute."""
+    try:
+        return dispute_service.update_dispute_status(
+            db=db, 
+            dispute_id=dispute_id, 
+            status=request.status
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while updating the dispute.",
         )
